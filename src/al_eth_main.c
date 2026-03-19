@@ -1895,6 +1895,71 @@ al_eth_config_rx_fwd(struct al_eth_adapter *adapter)
 #ifdef CONFIG_PHYLIB
 /* MDIO */
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,3,0)
+/*
+ * Kernel < 6.3: C45 goes through regular read/write with MII_ADDR_C45 flag.
+ * For clause 22 (RGMII PHYs), dev=0.
+ */
+static int al_mdio_read(struct mii_bus *bp, int mii_id, int regnum)
+{
+	struct al_eth_adapter *adapter = bp->priv;
+	u16 value = 0;
+	int rc;
+	int timeout = MDIO_TIMEOUT_MSEC;
+	int dev, reg;
+
+	if (regnum & MII_ADDR_C45) {
+		dev = (regnum >> 16) & 0x1f;
+		reg = regnum & 0xffff;
+	} else {
+		dev = 0;
+		reg = regnum;
+	}
+
+	while (timeout > 0) {
+		rc = al_eth_mdio_read(&adapter->hal_adapter, adapter->phy_addr,
+			dev, reg, &value);
+		if (rc == 0)
+			return value;
+		timeout -= 10;
+		msleep(10);
+	}
+
+	if (rc)
+		netdev_err(adapter->netdev, "MDIO read failed on timeout\n");
+
+	return value;
+}
+
+static int al_mdio_write(struct mii_bus *bp, int mii_id, int regnum, u16 val)
+{
+	struct al_eth_adapter *adapter = bp->priv;
+	int rc;
+	int timeout = MDIO_TIMEOUT_MSEC;
+	int dev, reg;
+
+	if (regnum & MII_ADDR_C45) {
+		dev = (regnum >> 16) & 0x1f;
+		reg = regnum & 0xffff;
+	} else {
+		dev = 0;
+		reg = regnum;
+	}
+
+	while (timeout > 0) {
+		rc = al_eth_mdio_write(&adapter->hal_adapter, adapter->phy_addr,
+			dev, reg, val);
+		if (rc == 0)
+			return 0;
+		netdev_err(adapter->netdev, "mdio write failed. retry in 10ms\n");
+		timeout -= 10;
+		msleep(10);
+	}
+
+	return rc;
+}
+#endif
+
 static int al_mdio_read_c45(struct mii_bus *bp, int mii_id, int dev, int reg)
 {
 	struct al_eth_adapter *adapter = bp->priv;
@@ -1954,6 +2019,16 @@ al_mdio_write_c45(struct mii_bus *bp, int mii_id, int dev, int reg, u16 val)
 	return rc;
 }
 
+static int al_mdio_read_c22(struct mii_bus *bp, int mii_id, int regnum)
+{
+	return al_mdio_read_c45(bp, mii_id, 0, regnum);
+}
+
+static int al_mdio_write_c22(struct mii_bus *bp, int mii_id, int regnum, u16 val)
+{
+	return al_mdio_write_c45(bp, mii_id, 0, regnum, val);
+}
+
 /**
  * al_eth_mdiobus_teardown - mdiobus unregister
  *
@@ -1997,8 +2072,15 @@ static int al_eth_mdiobus_setup(struct al_eth_adapter *adapter)
 #else
 	adapter->mdio_bus->parent    = &adapter->pdev->dev;
 #endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6,3,0)
+	adapter->mdio_bus->read      = &al_mdio_read_c22;
+	adapter->mdio_bus->write     = &al_mdio_write_c22;
 	adapter->mdio_bus->read_c45  = &al_mdio_read_c45;
 	adapter->mdio_bus->write_c45 = &al_mdio_write_c45;
+#else
+	adapter->mdio_bus->read      = &al_mdio_read;
+	adapter->mdio_bus->write     = &al_mdio_write;
+#endif
 
 	/* Initialise the interrupts to polling */
 	for (i = 0; i < PHY_MAX_ADDR; i++)
