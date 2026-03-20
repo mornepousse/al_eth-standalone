@@ -1362,7 +1362,9 @@ void al_eth_update_intr_moderation(struct al_eth_adapter *adapter, unsigned int 
 }
 
 static int al_eth_get_coalesce(struct net_device *net_dev,
-				    struct ethtool_coalesce *coalesce)
+				    struct ethtool_coalesce *coalesce,
+				    struct kernel_ethtool_coalesce *kernel_coal,
+				    struct netlink_ext_ack *extack)
 {
 	struct al_eth_adapter *adapter = netdev_priv(net_dev);
 
@@ -4185,43 +4187,29 @@ static int al_eth_close(struct net_device *netdev)
 #if 0
 
 static int
-al_eth_get_settings(struct net_device *netdev, struct ethtool_cmd *ecmd)
+al_eth_get_link_ksettings(struct net_device *netdev,
+			  struct ethtool_link_ksettings *cmd)
 {
 	struct al_eth_adapter *adapter = netdev_priv(netdev);
-	struct al_eth_board_params params;
-	int rc;
 
 #ifdef CONFIG_PHYLIB
 	struct phy_device *phydev = adapter->phydev;
 
 	if (phydev)
-		return phy_ethtool_gset(phydev, ecmd);
+		return phy_ethtool_ksettings_get(phydev, cmd);
 #endif
 
-	rc = al_eth_board_params_get(adapter->mac_base, &params);
-	if (rc) {
-		netdev_err(adapter->netdev, "Board info not available\n");
-		return rc;
-	}
-
-	/* If we are in 25g_10g_autodetect, need to check the speed on the fly */
-	if (params.media_type == AL_ETH_BOARD_MEDIA_TYPE_25G_10G_AUTO) {
-		rc = al_eth_get_serdes_25g_speed(adapter, &adapter->link_config.active_speed);
-		if (rc) {
-			netdev_err(adapter->netdev, "Invalid speed read from 25G serdes\n");
-			return rc;
-		}
-	}
-
-	ecmd->speed = adapter->link_config.active_speed;
-	ecmd->duplex = adapter->link_config.active_duplex;
-	ecmd->autoneg = adapter->link_config.autoneg;
+	cmd->base.speed = adapter->link_config.active_speed;
+	cmd->base.duplex = adapter->link_config.active_duplex;
+	cmd->base.autoneg = adapter->link_config.autoneg;
+	cmd->base.port = PORT_TP;
 
 	return 0;
 }
 
 static int
-al_eth_set_settings(struct net_device *netdev, struct ethtool_cmd *ecmd)
+al_eth_set_link_ksettings(struct net_device *netdev,
+			  const struct ethtool_link_ksettings *cmd)
 {
 	struct al_eth_adapter *adapter = netdev_priv(netdev);
 	int rc = 0;
@@ -4229,13 +4217,13 @@ al_eth_set_settings(struct net_device *netdev, struct ethtool_cmd *ecmd)
 	struct phy_device *phydev = adapter->phydev;
 
 	if (phydev)
-		return phy_ethtool_sset(phydev, ecmd);
+		return phy_ethtool_ksettings_set(phydev, cmd);
 #endif
 
 	/* in case no phy exist set only mac parameters */
-	adapter->link_config.active_speed = ecmd->speed;
-	adapter->link_config.active_duplex = ecmd->duplex;
-	adapter->link_config.autoneg = ecmd->autoneg;
+	adapter->link_config.active_speed = cmd->base.speed;
+	adapter->link_config.active_duplex = cmd->base.duplex;
+	adapter->link_config.autoneg = cmd->base.autoneg;
 
 	if (adapter->up)
 		dev_warn(&adapter->pdev->dev,
@@ -4247,7 +4235,9 @@ al_eth_set_settings(struct net_device *netdev, struct ethtool_cmd *ecmd)
 
 static int al_eth_ethtool_set_coalesce(
 			struct net_device *net_dev,
-			struct ethtool_coalesce *coalesce)
+			struct ethtool_coalesce *coalesce,
+			struct kernel_ethtool_coalesce *kernel_coal,
+			struct netlink_ext_ack *extack)
 {
 	struct al_eth_adapter *adapter = netdev_priv(net_dev);
 	unsigned int tx_usecs = adapter->tx_usecs;
@@ -4830,8 +4820,8 @@ static void al_eth_get_strings(struct net_device *netdev, u32 sset, u8 *data)
 /****************** ETHTOOL_STATS END ******************/
 
 static const struct ethtool_ops al_eth_ethtool_ops = {
-	.get_settings		= al_eth_get_settings,
-	.set_settings		= al_eth_set_settings,
+	.get_link_ksettings	= al_eth_get_link_ksettings,
+	.set_link_ksettings	= al_eth_set_link_ksettings,
 	.get_drvinfo		= al_eth_get_drvinfo,
 /*	.get_regs_len		= al_eth_get_regs_len,*/
 /*	.get_regs		= al_eth_get_regs,*/
