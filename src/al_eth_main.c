@@ -254,12 +254,17 @@ MODULE_DEVICE_TABLE(pci, al_eth_pci_tbl);
 	AL_ETH_INTR_MODERATION_RESOLUTION_NSECS(sb_clk_freq)))
 
 /** Enable (AL_TRUE) / disable (AL_FALSE) interrupt moderation */
-#define AL_ETH_DEFAULT_ADAPTIVE_INT_MODERATION	AL_TRUE
+#define AL_ETH_DEFAULT_ADAPTIVE_INT_MODERATION	AL_FALSE
 
 static int adaptive_int_moderation = AL_ETH_DEFAULT_ADAPTIVE_INT_MODERATION;
 module_param(adaptive_int_moderation, int, 0);
 MODULE_PARM_DESC(adaptive_int_moderation,
 	"Adaptive interrupt moderation Enable/Disable. 0 = Disable, 1 = Enable");
+
+static int num_queues = 0;
+module_param(num_queues, int, 0);
+MODULE_PARM_DESC(num_queues,
+	"Number of RX/TX queues (0 = auto, match CPU count)");
 
 static struct al_eth_intr_moderation_entry
 default_moderation_table[AL_ETH_INTR_MAX_NUM_OF_LEVELS] = {
@@ -3100,18 +3105,18 @@ al_eth_tx_poll(struct napi_struct *napi, int budget)
 		tx_bytes += skb->len;
 		dev_dbg(&adapter->pdev->dev, "tx_poll: q %d skb %p completed\n",
 				qid, skb);
-		       dev_kfree_skb(skb);
+		napi_consume_skb(skb, budget);
 		tx_pkt++;
-
-		/** Increase counters, relevent in adaptive mode only */
-		tx_ring->packets += tx_pkt;
-		tx_ring->bytes += tx_bytes;
 
 		total_done -= tx_info->tx_descs;
 		next_to_clean = AL_ETH_TX_RING_IDX_NEXT(tx_ring, next_to_clean);
 	}
 
 	netdev_tx_completed_queue(txq, tx_pkt, tx_bytes);
+
+	/** Increase counters, relevant in adaptive mode only */
+	tx_ring->packets += tx_pkt;
+	tx_ring->bytes += tx_bytes;
 
 	tx_ring->next_to_clean = next_to_clean;
 
@@ -5457,8 +5462,11 @@ al_eth_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	adapter->rx_ring_count = AL_ETH_DEFAULT_RX_DESCS;
 	adapter->rx_descs_count = AL_ETH_DEFAULT_RX_DESCS;
 
-	adapter->num_tx_queues = AL_ETH_NUM_QUEUES;
-	adapter->num_rx_queues = AL_ETH_NUM_QUEUES;
+	if (num_queues > 0 && num_queues <= AL_ETH_NUM_QUEUES)
+		adapter->num_tx_queues = adapter->num_rx_queues = num_queues;
+	else
+		adapter->num_tx_queues = adapter->num_rx_queues =
+			min_t(int, num_online_cpus(), AL_ETH_NUM_QUEUES);
 
 	adapter->small_copy_len = AL_ETH_DEFAULT_SMALL_PACKET_LEN;
 	adapter->link_poll_interval = AL_ETH_DEFAULT_LINK_POLL_INTERVAL;

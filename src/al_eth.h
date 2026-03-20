@@ -61,7 +61,7 @@ enum al_eth_direction {
 #define AL_ETH_DEFAULT_SMALL_PACKET_LEN		(128 - NET_IP_ALIGN)
 #define AL_ETH_HEADER_COPY_SIZE			(128 - NET_IP_ALIGN)
 
-#define AL_ETH_DEFAULT_MAX_RX_BUFF_ALLOC_SIZE 1536
+#define AL_ETH_DEFAULT_MAX_RX_BUFF_ALLOC_SIZE 2048
 /*
  * minimum the buffer size to 600 to avoid situation the mtu will be changed
  * from too little buffer to very big one and then the number of buffer per
@@ -113,8 +113,8 @@ enum al_eth_direction {
 #define AL_ETH_INTR_HIGHEST_PKTS           128
 #define AL_ETH_INTR_HIGHEST_BYTES          192*1024
 
-#define AL_ETH_INTR_INITIAL_TX_INTERVAL_USECS		196
-#define AL_ETH_INTR_INITIAL_RX_INTERVAL_USECS		0
+#define AL_ETH_INTR_INITIAL_TX_INTERVAL_USECS		64
+#define AL_ETH_INTR_INITIAL_RX_INTERVAL_USECS		64
 
 struct al_eth_irq {
 	irq_handler_t	handler;
