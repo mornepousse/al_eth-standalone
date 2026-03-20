@@ -63,11 +63,11 @@ A hardware test suite is included in `test/`:
 ```bash
 # Deploy and run on target NAS
 cd test
-bash deploy_tests.sh 192.168.1.120 --run
+bash deploy_tests.sh <nas_ip> --run
 
 # Or run individually on the NAS
 bash run_tests.sh              # 13 functional checks
-bash bench.sh 192.168.1.113    # iperf3 throughput benchmark
+bash bench.sh <iperf3_server>  # iperf3 throughput benchmark
 bash stress.sh                 # 10min stability test
 ```
 

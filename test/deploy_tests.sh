@@ -3,7 +3,7 @@
 # Usage: bash deploy_tests.sh [nas_ip] [--run]
 
 set -eu
-NAS="${1:-192.168.1.120}"
+NAS="${1:?Usage: deploy_tests.sh <nas_ip> [--run]}"
 RUN="${2:-}"
 
 echo "Deploying test suite to root@${NAS}:/root/al_eth_tests/"
@@ -18,7 +18,7 @@ scp -o ConnectTimeout=5 \
 echo "Done. On the NAS run:"
 echo "  cd /root/al_eth_tests"
 echo "  bash run_tests.sh              # functional tests"
-echo "  bash bench.sh 192.168.1.113    # iperf3 benchmark"
+echo "  bash bench.sh <iperf3_server>  # iperf3 benchmark"
 echo "  bash stress.sh                 # 10min stability"
 
 if [ "$RUN" = "--run" ]; then
